@@ -1,45 +1,38 @@
 import 'package:flutter/material.dart';
-
-import 'forgot_password.dart'; // Import the ForgotPasswordPage
-import 'services/user_service.dart';
+import 'services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
   @override
   _LoginPageState createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _userService = UserService();
-  bool _isLoading = false;
+  final _authService = AuthService();
 
-  Future<void> _login() async {
+  String _email = '';
+  String _password = '';
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
 
       try {
-        final success = await _userService.login(
-          _emailController.text,
-          _passwordController.text,
-        );
-
-        if (success) {
-          Navigator.pushReplacementNamed(context, '/home');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid credentials')),
-          );
-        }
+        await _authService.loginUser(_email, _password);
+        Navigator.pushReplacementNamed(context, '/home');
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login error: $e')),
-        );
+        setState(() {
+          _errorMessage = e.toString();
+        });
       } finally {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -47,105 +40,85 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text('Login'),
+        backgroundColor: const Color(0xFF029fae),
+      ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 100), // Adjust to shift content down
-                Text(
-                  "Welcome Back",
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.lightBlue.shade900, // Changed to light blue
+        padding: EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 20),
+              TextFormField(
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Please enter a valid email';
+                  }
+                  return null;
+                },
+                onChanged: (value) => _email = value,
+              ),
+              SizedBox(height: 20),
+              TextFormField(
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
+                obscureText: true,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  return null;
+                },
+                onChanged: (value) => _password = value,
+              ),
+              SizedBox(height: 30),
+              if (_errorMessage != null)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 20),
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    return null;
-                  },
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF029fae),
+                  padding: EdgeInsets.symmetric(vertical: 15),
                 ),
-
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 10),
-
-                // Forgot Password
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const ForgotPasswordPage()),
-                      );
-                    },
-                    child: const Text(
-                      "Forgot Password?",
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF029fae),
-                        fontWeight: FontWeight.bold,
+                child: _isLoading
+                    ? CircularProgressIndicator(color: Colors.white)
+                    : Text(
+                        'Login',
+                        style: TextStyle(fontSize: 18),
                       ),
-                    ),
-                  ),
+              ),
+              SizedBox(height: 20),
+              TextButton(
+                onPressed: () =>
+                    Navigator.pushReplacementNamed(context, '/signup'),
+                child: Text(
+                  'Don\'t have an account? Sign Up',
+                  style: TextStyle(color: const Color(0xFF029fae)),
                 ),
-                const SizedBox(height: 20),
-
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Login'),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Sign In with Google
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Handle sign in with Google logic
-                  },
-                  icon: Image.asset('assets/images/google_logo.png',
-                      height: 24, width: 24), // Ensure correct path
-                  label: const Text("Sign in with Google"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 15),
-                    textStyle: const TextStyle(fontSize: 18),
-                    side: const BorderSide(color: Colors.grey),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.0),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 50), // Adjust to shift content down
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

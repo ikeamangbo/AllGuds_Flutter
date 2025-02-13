@@ -6,8 +6,10 @@ import 'cartpage.dart'; // Import the CartPage
 import 'categories.dart'; // Import the CategoriesPage
 import 'product_detail.dart'; // Import the ProductDetailPage
 import 'profilepage.dart'; // Import the ProfilePage
+import 'services/api_service.dart';
+import 'widgets/app_drawer.dart';
+import 'modals/add_product_modal.dart'; // Add this import
 import 'wishlist.dart'; // Import the WishlistPage
-
 
 const Color primaryColor = Color(0xFF029fae); // Define the primary color
 
@@ -24,14 +26,62 @@ class _HomePageState extends State<HomePage> {
   Timer? _timer;
   final List<Map<String, String>> _wishlist = [];
   final List<Map<String, dynamic>> _cart = [];
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _products = [];
+  bool _isLoading = true;
+  int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProducts();
+    _timer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
+      if (_currentPage < 2) {
+        _currentPage++;
+      } else {
+        _currentPage = 0;
+      }
+
+      _pageController.animateToPage(
+        _currentPage,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeIn,
+      );
+    });
+  }
+
+  Future<void> _fetchProducts() async {
+    try {
+      final products = await _apiService.getProducts();
+      print('Fetched products: $products'); // Debug log
+
+      if (mounted) {
+        setState(() {
+          _products = products;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching products: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load products: ${e.toString()}')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
-        backgroundColor: primaryColor, // Use the primary color
+        title: const Text('AllGuds'),
+        backgroundColor: const Color(0xFF029fae),
       ),
+      drawer: const AppDrawer(),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -92,122 +142,78 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 10),
-              SizedBox(
-                height: 250,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildProductCard(
-                        'SB-DUNKS VINTAGE',
-                        'assets/images/product1.jpeg',
-                        Colors.blue.shade100,
-                        '\$120',
-                        '\$150',
-                        120.0),
-                    _buildProductCard(
-                        'RAYBAN RETRO',
-                        'assets/images/product2.jpg',
-                        Colors.pink.shade100,
-                        '\$80',
-                        '\$100',
-                        80.0),
-                    _buildProductCard(
-                        'MACBOOK PRO',
-                        'assets/images/product3.jpeg',
-                        Colors.grey.shade300,
-                        '\$1200',
-                        '\$1500',
-                        1200.0),
-                    _buildProductCard(
-                        'APPLE IPHONE SILICON CASE',
-                        'assets/images/product4.jpg',
-                        Colors.orange.shade100,
-                        '\$20',
-                        '\$25',
-                        20.0),
-                    _buildProductCard(
-                        'APPLE SMART WATCH',
-                        'assets/images/product5.jpg',
-                        Colors.green.shade100,
-                        '\$300',
-                        '\$350',
-                        300.0),
-                  ],
-                ),
-              ),
+              _buildLatestProducts(),
             ],
           ),
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        selectedItemColor: primaryColor,
+        unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
-        items: [
-          const BottomNavigationBarItem(
+        items: const [
+          BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: IconButton(
-              icon: const Icon(Icons.category),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CategoriesPage()),
-                );
-              },
-            ),
+            icon: Icon(Icons.category),
             label: 'Categories',
           ),
           BottomNavigationBarItem(
-            icon: IconButton(
-              icon: const Icon(Icons.shopping_cart),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => CartPage(cartItems: _cart)),
-                );
-              },
-            ),
-            label: 'My Cart',
-          ),
-          BottomNavigationBarItem(
-            icon: IconButton(
-              icon: const Icon(Icons.favorite),
-              onPressed: () async {
-                final updatedWishlist = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => WishlistPage(
-                            initialWishlistItems: _wishlist,
-                            onRemove: (String title) {
-                              _removeFromWishlist(title);
-                              setState(() {}); // Ensure the state is updated
-                            },
-                          )),
-                );
-                if (updatedWishlist != null) {
-                  _updateWishlist(updatedWishlist);
-                }
-              },
-            ),
+            icon: Icon(Icons.favorite),
             label: 'Wishlist',
           ),
           BottomNavigationBarItem(
-            icon: IconButton(
-              icon: const Icon(Icons.person),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ProfilePage()),
-                );
-              },
-            ),
+            icon: Icon(Icons.shopping_cart),
+            label: 'Cart',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
             label: 'Profile',
           ),
         ],
-        selectedItemColor: primaryColor, // Use the primary color
-        unselectedItemColor: Colors.grey,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+          switch (index) {
+            case 0:
+              // Home - already on home page
+              break;
+            case 1:
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CategoriesPage()),
+              );
+              break;
+            case 2:
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (context) => WishlistPage(
+                  initialWishlistItems: _wishlist,
+                  onRemove: _removeFromWishlist,
+                ),
+              );
+              break;
+            case 3:
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CartPage(cartItems: _cart),
+                ),
+              );
+              break;
+            case 4:
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
+              break;
+          }
+        },
       ),
     );
   }
@@ -219,22 +225,58 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
-      if (_currentPage < 2) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
+  Widget _buildLatestProducts() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-      _pageController.animateToPage(
-        _currentPage,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeIn,
-      );
-    });
+    if (_products.isEmpty) {
+      return const Center(child: Text('No products available'));
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.75,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _products.length,
+      itemBuilder: (context, index) {
+        try {
+          final product = _products[index];
+          print('Building product card for: $product');
+
+          final name = product['name']?.toString() ?? 'Unnamed Product';
+          final imageUrl = product['img']?.toString();
+          final validImageUrl = (imageUrl != null && imageUrl.isNotEmpty)
+              ? imageUrl
+              : 'https://placehold.co/600x400';
+
+          num priceNum;
+          try {
+            priceNum = num.tryParse(product['price'].toString()) ?? 0;
+          } catch (e) {
+            priceNum = 0;
+          }
+          final price = priceNum.toDouble();
+
+          return _buildProductCard(
+            name,
+            validImageUrl,
+            Colors.blue.shade100,
+            '\$${price.toStringAsFixed(2)}',
+            '\$${(price * 1.2).toStringAsFixed(2)}',
+            price,
+          );
+        } catch (e) {
+          print('Error building product card: $e');
+          return const SizedBox();
+        }
+      },
+    );
   }
 
   void _addToCart(String title, String imagePath, int quantity, double price) {
@@ -386,104 +428,107 @@ class _HomePageState extends State<HomePage> {
   Widget _buildProductCard(String title, String imagePath,
       Color backgroundColor, String newPrice, String oldPrice, double price) {
     bool isWishlisted = _wishlist.any((item) => item['title'] == title);
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => ProductDetailPage(
-                    title: title,
-                    imagePath: imagePath,
-                    newPrice: newPrice,
-                    oldPrice: oldPrice,
-                    isWishlisted: isWishlisted,
-                    onAddToWishlist: _addToWishlist,
-                    onRemoveFromWishlist: _removeFromWishlist,
-                    onAddToCart: (title, imagePath, quantity) =>
-                        _addToCart(title, imagePath, quantity, price),
-                  )),
-        );
-      },
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 150,
-            height: 150,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(10.0),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.5),
-                  spreadRadius: 2,
-                  blurRadius: 5,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10.0),
-                  child: Image.asset(imagePath,
-                      height: double.infinity,
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(10)),
+                child: Image.network(
+                  imagePath,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 150,
                       width: double.infinity,
-                      fit: BoxFit.cover),
-                ),
-                Positioned(
-                  top: 5,
-                  left: 5,
-                  child: GestureDetector(
-                    onTap: () {
-                      _addToCart(title, imagePath, 1, price);
-                    },
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black,
+                      color: Colors.grey[200],
+                      child: const Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) {
+                    // Return a default image container on error
+                    return Container(
+                      height: 150,
+                      width: double.infinity,
+                      color: Colors.grey[200],
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.image_not_supported,
+                              size: 40, color: Colors.grey[400]),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Image not available',
+                            style: TextStyle(
+                                color: Colors.grey[600], fontSize: 12),
+                          ),
+                        ],
                       ),
-                      padding: const EdgeInsets.all(4),
-                      child: const Icon(
-                        Icons.add_shopping_cart,
-                        color: Colors.white,
-                        size: 16,
+                    );
+                  },
+                ),
+              ),
+              Positioned(
+                top: 5,
+                right: 5,
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => _addToCart(title, imagePath, 1, price),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black54,
+                        ),
+                        padding: const EdgeInsets.all(6),
+                        child: const Icon(
+                          Icons.add_shopping_cart,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Positioned(
-                  top: 5,
-                  right: 5,
-                  child: GestureDetector(
-                    onTap: () {
-                      if (isWishlisted) {
-                        _removeFromWishlist(title);
-                      } else {
-                        _addToWishlist(title, imagePath);
-                      }
-                      setState(() {}); // Ensure the state is updated
-                    },
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black,
-                      ),
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        isWishlisted ? Icons.favorite : Icons.favorite_border,
-                        color: isWishlisted ? Colors.red : Colors.white,
-                        size: 16,
+                    const SizedBox(width: 5),
+                    GestureDetector(
+                      onTap: () {
+                        if (isWishlisted) {
+                          _removeFromWishlist(title);
+                        } else {
+                          _addToWishlist(title, imagePath);
+                        }
+                        setState(() {});
+                      },
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black54,
+                        ),
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(
+                          isWishlisted ? Icons.favorite : Icons.favorite_border,
+                          color: isWishlisted ? Colors.red : Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 8.0, left: 4.0),
+            padding: const EdgeInsets.all(8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -491,9 +536,10 @@ class _HomePageState extends State<HomePage> {
                   title,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Colors.black,
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -501,7 +547,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       newPrice,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 16,
                         color: Colors.green,
                         fontWeight: FontWeight.bold,
                       ),
@@ -541,6 +587,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _wishlist.clear();
       _wishlist.addAll(updatedWishlist);
-    }); 
+    });
   }
 }
